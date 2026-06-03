@@ -1,0 +1,1047 @@
+
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>🎬 Birga Ko'rish</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:      #0f0f1a;
+    --card:    #1a1a2e;
+    --border:  #2a2a4a;
+    --accent:  #7c3aed;
+    --accent2: #06b6d4;
+    --text:    #e2e8f0;
+    --muted:   #94a3b8;
+    --green:   #10b981;
+    --red:     #ef4444;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ─── HEADER ─── */
+  .header {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header h1 { font-size: 18px; font-weight: 700; }
+  .header-back {
+    background: rgba(255,255,255,0.15);
+    border: none;
+    color: #fff;
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    font-size: 18px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .header-back:hover { background: rgba(255,255,255,0.25); }
+
+  /* ─── SCREENS ─── */
+  .screen { display: none; padding: 16px; }
+  .screen.active { display: block; }
+
+  /* ─── CARDS ─── */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+
+  /* ─── MOVIES GRID ─── */
+  .movies-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+  .movie-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform .15s, border-color .15s;
+    position: relative;
+  }
+  .movie-card:active { transform: scale(.97); }
+  .movie-card.selected { border-color: var(--accent); }
+  .movie-card.selected::after {
+    content: '✅';
+    position: absolute;
+    top: 8px; right: 8px;
+    font-size: 20px;
+    filter: drop-shadow(0 0 4px rgba(0,0,0,.8));
+  }
+  .movie-poster {
+    width: 100%; aspect-ratio: 2/3;
+    object-fit: cover;
+    background: var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 40px;
+  }
+  .movie-poster img { width: 100%; height: 100%; object-fit: cover; }
+  .movie-info { padding: 10px; }
+  .movie-title { font-size: 13px; font-weight: 600; line-height: 1.3; }
+  .movie-meta  { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .movie-rating { color: #f59e0b; }
+
+  /* ─── USERS LIST ─── */
+  .users-list { display: flex; flex-direction: column; gap: 8px; }
+  .user-item {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: border-color .15s;
+  }
+  .user-item:active { opacity: .8; }
+  .user-item.selected { border-color: var(--accent); }
+  .user-avatar {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 700;
+    flex-shrink: 0;
+  }
+  .user-name  { font-size: 15px; font-weight: 600; }
+  .user-uname { font-size: 12px; color: var(--muted); }
+  .user-check { margin-left: auto; font-size: 20px; }
+
+  /* ─── SELECTED PREVIEW ─── */
+  .selected-preview {
+    background: linear-gradient(135deg, rgba(124,58,237,.15), rgba(6,182,212,.15));
+    border: 1px solid var(--accent);
+    border-radius: 14px;
+    padding: 14px;
+    margin-bottom: 16px;
+    display: none;
+  }
+  .selected-preview.show { display: block; }
+  .preview-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .preview-row:last-child { margin-bottom: 0; }
+  .preview-label { font-size: 12px; color: var(--muted); }
+  .preview-val   { font-size: 14px; font-weight: 600; }
+
+  /* ─── BUTTONS ─── */
+  .btn {
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: 14px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity .15s, transform .1s;
+    margin-bottom: 8px;
+  }
+  .btn:active { transform: scale(.98); opacity: .9; }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #fff;
+  }
+  .btn-danger  { background: var(--red);   color: #fff; }
+  .btn-outline {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+  /* ─── WAITING SCREEN ─── */
+  .waiting-box {
+    text-align: center;
+    padding: 32px 16px;
+  }
+  .waiting-spinner {
+    width: 64px; height: 64px;
+    border: 4px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 20px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .waiting-title { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+  .waiting-sub   { color: var(--muted); font-size: 14px; }
+
+  /* ─── PLAYER SCREEN ─── */
+  .player-container {
+    background: #000;
+    border-radius: 14px;
+    overflow: hidden;
+    margin-bottom: 12px;
+    position: relative;
+  }
+  .player-container video {
+    width: 100%;
+    max-height: 260px;
+    display: block;
+  }
+  .sync-indicator {
+    position: absolute;
+    top: 8px; left: 8px;
+    background: rgba(0,0,0,.7);
+    color: var(--green);
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .sync-dot {
+    width: 8px; height: 8px;
+    background: var(--green);
+    border-radius: 50%;
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: .3; }
+  }
+
+  .members-row {
+    display: flex; gap: 8px; margin-bottom: 12px;
+  }
+  .member-chip {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 6px 12px;
+    font-size: 13px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .member-chip.online  { border-color: var(--green); }
+  .member-chip .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+  }
+  .member-chip.online .dot { background: var(--green); }
+
+  /* ─── REACTIONS ─── */
+  .reactions {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+  .react-btn {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 14px;
+    font-size: 20px;
+    cursor: pointer;
+    transition: transform .1s;
+  }
+  .react-btn:active { transform: scale(1.3); }
+
+  /* Floating reaction animation */
+  .float-react {
+    position: fixed;
+    font-size: 36px;
+    animation: floatUp 2s ease-out forwards;
+    pointer-events: none;
+    z-index: 999;
+  }
+  @keyframes floatUp {
+    0%   { transform: translateY(0) scale(1); opacity: 1; }
+    100% { transform: translateY(-200px) scale(1.5); opacity: 0; }
+  }
+
+  /* ─── CHAT ─── */
+  .chat-box {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    height: 120px;
+    overflow-y: auto;
+    padding: 10px;
+    margin-bottom: 8px;
+    font-size: 13px;
+  }
+  .chat-msg { margin-bottom: 6px; line-height: 1.4; }
+  .chat-msg .who  { font-weight: 700; color: var(--accent2); }
+  .chat-msg .text { color: var(--text); }
+  .chat-msg.system { color: var(--muted); font-style: italic; }
+
+  .chat-input-row {
+    display: flex; gap: 8px;
+  }
+  .chat-input {
+    flex: 1;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-size: 14px;
+  }
+  .chat-input:focus { outline: none; border-color: var(--accent); }
+  .chat-send {
+    background: var(--accent);
+    border: none;
+    border-radius: 10px;
+    padding: 10px 14px;
+    color: #fff;
+    font-size: 18px;
+    cursor: pointer;
+  }
+
+  /* ─── TOAST ─── */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: rgba(30,30,50,.95);
+    color: #fff;
+    padding: 12px 24px;
+    border-radius: 24px;
+    font-size: 14px;
+    font-weight: 500;
+    z-index: 1000;
+    transition: transform .3s, opacity .3s;
+    opacity: 0;
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--border);
+    text-align: center;
+    max-width: 80vw;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+  /* ─── SEARCH ─── */
+  .search-input {
+    width: 100%;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 16px;
+    color: var(--text);
+    font-size: 15px;
+    margin-bottom: 14px;
+  }
+  .search-input:focus { outline: none; border-color: var(--accent); }
+
+  /* ─── SECTION TITLE ─── */
+  .section-title {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--muted);
+    margin-bottom: 12px;
+    font-weight: 600;
+  }
+
+  /* ─── EMPTY STATE ─── */
+  .empty {
+    text-align: center;
+    padding: 40px 16px;
+    color: var(--muted);
+  }
+  .empty-icon { font-size: 48px; margin-bottom: 12px; }
+  .empty-text { font-size: 15px; }
+
+  /* ─── STATUS BADGE ─── */
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 13px;
+    margin-bottom: 16px;
+  }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════
+     SCREEN 1: KINO TANLASH
+══════════════════════════════════════════════════════════ -->
+<div id="screen-movies" class="screen active">
+  <div class="header">
+    <h1>🎬 Kino Tanlang</h1>
+  </div>
+  <div style="padding: 16px;">
+    <input type="text" class="search-input" id="movie-search"
+           placeholder="🔍 Kino qidirish..." oninput="filterMovies()">
+    <div class="section-title">Barcha kinolar</div>
+    <div class="movies-grid" id="movies-grid">
+      <div class="empty"><div class="empty-icon">⏳</div><div class="empty-text">Yuklanmoqda...</div></div>
+    </div>
+    <div style="margin-top: 16px;">
+      <button class="btn btn-primary" id="btn-select-movie" disabled onclick="goToSelectUser()">
+        👥 Do'st Tanlash →
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     SCREEN 2: DO'ST TANLASH
+══════════════════════════════════════════════════════════ -->
+<div id="screen-users" class="screen">
+  <div class="header">
+    <button class="header-back" onclick="goBack('screen-movies')">‹</button>
+    <h1>👤 Do'st Tanlang</h1>
+  </div>
+  <div style="padding: 16px;">
+    <!-- Tanlangan kino preview -->
+    <div class="selected-preview show" id="movie-preview">
+      <div class="preview-row">
+        <span>🎬</span>
+        <div>
+          <div class="preview-label">Tanlangan kino</div>
+          <div class="preview-val" id="preview-movie-title">—</div>
+        </div>
+      </div>
+    </div>
+
+    <input type="text" class="search-input" id="user-search"
+           placeholder="🔍 Do'st qidirish..." oninput="filterUsers()">
+    <div class="section-title">Botdagi foydalanuvchilar</div>
+    <div class="users-list" id="users-list">
+      <div class="empty"><div class="empty-icon">⏳</div><div class="empty-text">Yuklanmoqda...</div></div>
+    </div>
+    <div style="margin-top: 16px;">
+      <button class="btn btn-primary" id="btn-send-invite" disabled onclick="sendInvite()">
+        📨 Taklif Yuborish
+      </button>
+      <button class="btn btn-outline" onclick="goBack('screen-movies')">◀ Orqaga</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     SCREEN 3: KUTISH
+══════════════════════════════════════════════════════════ -->
+<div id="screen-waiting" class="screen">
+  <div class="header">
+    <h1>⏳ Kutilmoqda</h1>
+  </div>
+  <div style="padding: 16px;">
+    <div class="waiting-box">
+      <div class="waiting-spinner"></div>
+      <div class="waiting-title">Taklif yuborildi!</div>
+      <div class="waiting-sub" id="waiting-sub">Do'stingiz qabul qilishini kuting...</div>
+    </div>
+
+    <div class="card">
+      <div class="preview-row" style="margin-bottom:8px">
+        <span>🎬</span>
+        <div>
+          <div class="preview-label">Kino</div>
+          <div class="preview-val" id="waiting-movie">—</div>
+        </div>
+      </div>
+      <div class="preview-row">
+        <span>👤</span>
+        <div>
+          <div class="preview-label">Do'st</div>
+          <div class="preview-val" id="waiting-user">—</div>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn btn-danger" onclick="cancelSession()">❌ Bekor qilish</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     SCREEN 4: BIRGA KO'RISH PLAYER
+══════════════════════════════════════════════════════════ -->
+<div id="screen-player" class="screen">
+  <div class="header">
+    <h1>🎬 Birga Ko'rish</h1>
+  </div>
+  <div style="padding: 16px;">
+
+    <!-- Ulanganlar -->
+    <div class="members-row" id="members-row">
+      <div class="member-chip online" id="chip-host">
+        <div class="dot"></div>
+        <span id="chip-host-name">Siz</span>
+      </div>
+      <div class="member-chip" id="chip-guest">
+        <div class="dot"></div>
+        <span id="chip-guest-name">Do'st</span>
+      </div>
+    </div>
+
+    <!-- Video player -->
+    <div class="player-container">
+      <video id="video-player" controls playsinline
+             style="background:#000; width:100%; max-height:260px;">
+        Brauzeringiz video formatini qo'llab-quvvatlamaydi.
+      </video>
+      <div class="sync-indicator">
+        <div class="sync-dot"></div>
+        <span id="sync-label">Sinxron</span>
+      </div>
+    </div>
+
+    <!-- Reactions -->
+    <div class="reactions" id="reactions">
+      <button class="react-btn" onclick="sendReaction('😂')">😂</button>
+      <button class="react-btn" onclick="sendReaction('❤️')">❤️</button>
+      <button class="react-btn" onclick="sendReaction('😮')">😮</button>
+      <button class="react-btn" onclick="sendReaction('🔥')">🔥</button>
+      <button class="react-btn" onclick="sendReaction('👏')">👏</button>
+      <button class="react-btn" onclick="sendReaction('😢')">😢</button>
+    </div>
+
+    <!-- Chat -->
+    <div class="chat-box" id="chat-box"></div>
+    <div class="chat-input-row">
+      <input type="text" class="chat-input" id="chat-input"
+             placeholder="Xabar yozing..."
+             maxlength="200"
+             onkeydown="if(event.key==='Enter') sendChat()">
+      <button class="chat-send" onclick="sendChat()">➤</button>
+    </div>
+
+    <div style="margin-top: 12px;">
+      <button class="btn btn-danger" onclick="endSession()">⏹ Tomosha yakunlash</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+//  CONFIG — server URL ni o'zgartiring
+// ═══════════════════════════════════════════════════════
+// SERVER_URL ni Render.com dagi URL ga o'zgartiring:
+// Masalan: "https://kinouzwatch.onrender.com"
+const SERVER_URL = window.location.origin.includes("localhost")
+  ? "http://localhost:8000"
+  : "https://YOUR-APP.onrender.com";  // ← O'ZGARTIRING
+
+const WS_URL = SERVER_URL.replace("https://", "wss://").replace("http://", "ws://");
+
+// ═══════════════════════════════════════════════════════
+//  HOLAT
+// ═══════════════════════════════════════════════════════
+const tg = window.Telegram?.WebApp;
+const ME  = tg?.initDataUnsafe?.user;
+
+let state = {
+  movies:       [],
+  users:        [],
+  selectedMovie: null,
+  selectedUser:  null,
+  sid:           null,
+  role:          null,  // "host" | "guest"
+  ws:            null,
+  myName:        ME?.first_name || "Siz",
+  myId:          ME?.id || 0,
+};
+
+// ═══════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════
+document.addEventListener("DOMContentLoaded", async () => {
+  if (tg) {
+    tg.expand();
+    tg.enableClosingConfirmation();
+    tg.MainButton.hide();
+  }
+
+  // URL parametr: ?join=SID (2-user taklif qabul qilib kelgan)
+  const params = new URLSearchParams(location.search);
+  const joinSid = params.get("join");
+
+  if (joinSid) {
+    await joinAsGuest(joinSid);
+    return;
+  }
+
+  await loadMovies();
+  await loadUsers();
+});
+
+// ═══════════════════════════════════════════════════════
+//  MA'LUMOT YUKLASH
+// ═══════════════════════════════════════════════════════
+async function loadMovies() {
+  try {
+    const r = await fetch(`${SERVER_URL}/movies`);
+    const d = await r.json();
+    state.movies = d.movies || [];
+    renderMovies(state.movies);
+  } catch(e) {
+    document.getElementById("movies-grid").innerHTML =
+      `<div class="empty"><div class="empty-icon">❌</div><div class="empty-text">Server bilan bog'lanib bo'lmadi</div></div>`;
+  }
+}
+
+async function loadUsers() {
+  try {
+    const r = await fetch(`${SERVER_URL}/users`);
+    const d = await r.json();
+    // O'zini ro'yxatdan olib tashlash
+    state.users = (d.users || []).filter(u => u.id !== state.myId);
+    renderUsers(state.users);
+  } catch(e) {}
+}
+
+// ═══════════════════════════════════════════════════════
+//  RENDER
+// ═══════════════════════════════════════════════════════
+function renderMovies(movies) {
+  const grid = document.getElementById("movies-grid");
+  if (!movies.length) {
+    grid.innerHTML = `<div class="empty" style="grid-column:span 2">
+      <div class="empty-icon">🎬</div>
+      <div class="empty-text">Kinolar topilmadi</div>
+    </div>`;
+    return;
+  }
+  grid.innerHTML = movies.map(m => `
+    <div class="movie-card ${state.selectedMovie?.id === m.id ? 'selected' : ''}"
+         id="movie-${m.id}"
+         onclick="selectMovie(${JSON.stringify(m).replace(/"/g, '&quot;')})">
+      <div class="movie-poster">
+        ${m.poster
+          ? `<img src="${m.poster}" alt="${m.title}" onerror="this.parentElement.textContent='🎬'">`
+          : '🎬'}
+      </div>
+      <div class="movie-info">
+        <div class="movie-title">${m.title}</div>
+        <div class="movie-meta">
+          <span class="movie-rating">⭐ ${m.rating}</span>
+          · ${m.year}
+        </div>
+      </div>
+    </div>
+  `).join("");
+}
+
+function renderUsers(users) {
+  const list = document.getElementById("users-list");
+  if (!users.length) {
+    list.innerHTML = `<div class="empty">
+      <div class="empty-icon">👥</div>
+      <div class="empty-text">Foydalanuvchilar topilmadi</div>
+    </div>`;
+    return;
+  }
+  list.innerHTML = users.map(u => `
+    <div class="user-item ${state.selectedUser?.id === u.id ? 'selected' : ''}"
+         id="user-${u.id}"
+         onclick="selectUser(${JSON.stringify(u).replace(/"/g, '&quot;')})">
+      <div class="user-avatar">${(u.first_name || u.username || "?")[0].toUpperCase()}</div>
+      <div>
+        <div class="user-name">${u.first_name || u.username}</div>
+        <div class="user-uname">${u.username ? '@' + u.username : ''}</div>
+      </div>
+      <div class="user-check">${state.selectedUser?.id === u.id ? '✅' : ''}</div>
+    </div>
+  `).join("");
+}
+
+// ═══════════════════════════════════════════════════════
+//  TANLASH
+// ═══════════════════════════════════════════════════════
+function selectMovie(movie) {
+  state.selectedMovie = movie;
+  document.querySelectorAll(".movie-card").forEach(el => el.classList.remove("selected"));
+  const el = document.getElementById(`movie-${movie.id}`);
+  if (el) el.classList.add("selected");
+  document.getElementById("btn-select-movie").disabled = false;
+
+  if (tg) tg.HapticFeedback?.impactOccurred("light");
+}
+
+function selectUser(user) {
+  state.selectedUser = user;
+  document.querySelectorAll(".user-item").forEach(el => el.classList.remove("selected"));
+  const el = document.getElementById(`user-${user.id}`);
+  if (el) {
+    el.classList.add("selected");
+    el.querySelector(".user-check").textContent = "✅";
+  }
+  document.getElementById("btn-send-invite").disabled = false;
+
+  if (tg) tg.HapticFeedback?.impactOccurred("light");
+}
+
+// ═══════════════════════════════════════════════════════
+//  NAVIGATSIYA
+// ═══════════════════════════════════════════════════════
+function showScreen(id) {
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+}
+
+function goBack(to) { showScreen(to); }
+
+function goToSelectUser() {
+  if (!state.selectedMovie) return;
+  document.getElementById("preview-movie-title").textContent = state.selectedMovie.title;
+  showScreen("screen-users");
+}
+
+// ═══════════════════════════════════════════════════════
+//  FILTER
+// ═══════════════════════════════════════════════════════
+function filterMovies() {
+  const q = document.getElementById("movie-search").value.toLowerCase();
+  renderMovies(state.movies.filter(m =>
+    m.title.toLowerCase().includes(q) || (m.genre||"").includes(q)
+  ));
+}
+
+function filterUsers() {
+  const q = document.getElementById("user-search").value.toLowerCase();
+  renderUsers(state.users.filter(u =>
+    (u.first_name||"").toLowerCase().includes(q) ||
+    (u.username||"").toLowerCase().includes(q)
+  ));
+}
+
+// ═══════════════════════════════════════════════════════
+//  TAKLIF YUBORISH (HOST)
+// ═══════════════════════════════════════════════════════
+async function sendInvite() {
+  if (!state.selectedMovie || !state.selectedUser) return;
+
+  const btn = document.getElementById("btn-send-invite");
+  btn.disabled = true;
+  btn.textContent = "⏳ Yuborilmoqda...";
+
+  try {
+    // 1. Sessiya yaratish
+    state.sid = `wt_${state.myId}_${Date.now()}`;
+    const cr = await fetch(`${SERVER_URL}/session/create`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sid:     state.sid,
+        host_id: state.myId,
+        movie:   state.selectedMovie
+      })
+    });
+    if (!cr.ok) throw new Error("Sessiya yaratib bo'lmadi");
+
+    // 2. Taklif yuborish (bot orqali)
+    const ir = await fetch(`${SERVER_URL}/invite`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sid:         state.sid,
+        guest_id:    state.selectedUser.id,
+        host_name:   state.myName,
+        movie_title: state.selectedMovie.title,
+        webapp_url:  `${SERVER_URL}/webapp/watch.html?join=${state.sid}`
+      })
+    });
+    if (!ir.ok) throw new Error("Taklif yuborib bo'lmadi");
+
+    // 3. Kutish ekrani
+    document.getElementById("waiting-movie").textContent = state.selectedMovie.title;
+    document.getElementById("waiting-user").textContent  =
+      state.selectedUser.first_name || state.selectedUser.username;
+    showScreen("screen-waiting");
+
+    // 4. WebSocket ulash (host)
+    state.role = "host";
+    connectWebSocket();
+
+    toast("✅ Taklif yuborildi!");
+
+  } catch(e) {
+    toast("❌ " + e.message);
+    btn.disabled = false;
+    btn.textContent = "📨 Taklif Yuborish";
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  TAKLIF QABUL QILISH (GUEST)
+// ═══════════════════════════════════════════════════════
+async function joinAsGuest(sid) {
+  state.sid  = sid;
+  state.role = "guest";
+
+  try {
+    const r = await fetch(`${SERVER_URL}/session/${sid}`);
+    if (!r.ok) {
+      showScreen("screen-movies");
+      toast("❌ Sessiya topilmadi yoki tugagan");
+      await loadMovies();
+      await loadUsers();
+      return;
+    }
+    const s = await r.json();
+    state.selectedMovie = s.movie;
+
+    // To'g'ridan player ga
+    setupPlayer(s.movie);
+    showScreen("screen-player");
+    connectWebSocket();
+
+  } catch(e) {
+    toast("❌ Xatolik: " + e.message);
+    showScreen("screen-movies");
+    await loadMovies();
+    await loadUsers();
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  WEBSOCKET
+// ═══════════════════════════════════════════════════════
+function connectWebSocket() {
+  const wsUrl = `${WS_URL}/ws/${state.sid}/${state.myId}`;
+  state.ws = new WebSocket(wsUrl);
+
+  state.ws.onopen = () => {
+    console.log("WS connected");
+  };
+
+  state.ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    handleWsMessage(msg);
+  };
+
+  state.ws.onclose = () => {
+    console.log("WS closed");
+    // Qayta ulanish
+    setTimeout(() => {
+      if (state.sid) connectWebSocket();
+    }, 3000);
+  };
+
+  state.ws.onerror = (e) => {
+    console.error("WS error", e);
+  };
+}
+
+function handleWsMessage(msg) {
+  const video = document.getElementById("video-player");
+
+  switch(msg.type) {
+
+    case "init":
+      state.role = msg.role;
+      if (msg.movie) setupPlayer(msg.movie);
+      if (msg.play_state?.playing) {
+        video.currentTime = msg.play_state.time + (Date.now()/1000 - msg.play_state.updated);
+        video.play().catch(()=>{});
+      }
+      updateMembersUI(msg.members);
+      break;
+
+    case "both_ready":
+      toast("🎉 " + msg.msg);
+      if (state.role === "host") {
+        setupPlayer(state.selectedMovie);
+        showScreen("screen-player");
+      }
+      break;
+
+    case "user_joined":
+      updateMembersUI(msg.members);
+      addChatMsg("system", null, "Do'stingiz ulandi! 🎉");
+      toast("✅ Do'stingiz ulandi!");
+      document.getElementById("chip-guest").classList.add("online");
+      break;
+
+    case "user_left":
+      updateMembersUI(msg.members);
+      addChatMsg("system", null, "Do'stingiz chiqib ketdi.");
+      document.getElementById("chip-guest").classList.remove("online");
+      break;
+
+    case "play":
+      video.currentTime = msg.time;
+      video.play().catch(()=>{});
+      break;
+
+    case "pause":
+      video.currentTime = msg.time;
+      video.pause();
+      break;
+
+    case "seek":
+      video.currentTime = msg.time;
+      break;
+
+    case "reaction":
+      showFloatReaction(msg.emoji);
+      break;
+
+    case "chat":
+      addChatMsg("guest", "Do'st", msg.text);
+      break;
+
+    case "session_ended":
+      toast("Tomosha yakunlandi!");
+      setTimeout(() => {
+        state.sid = null;
+        showScreen("screen-movies");
+        loadMovies();
+        loadUsers();
+      }, 2000);
+      break;
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  PLAYER
+// ═══════════════════════════════════════════════════════
+function setupPlayer(movie) {
+  const video = document.getElementById("video-player");
+
+  if (movie.file_id) {
+    // Telegram file — bot orqali URL kerak
+    // Hozircha poster ko'rsatamiz
+    video.poster = movie.poster || "";
+    video.src    = "";
+    addChatMsg("system", null, `"${movie.title}" videosi yuklanmoqda...`);
+  } else if (movie.video_url) {
+    video.src    = movie.video_url;
+    video.poster = movie.poster || "";
+  } else {
+    video.poster = movie.poster || "";
+    addChatMsg("system", null, `🎬 "${movie.title}" — video URL mavjud emas.`);
+  }
+
+  // Video controls
+  let isSeeking = false;
+
+  video.addEventListener("play", () => {
+    if (!isSeeking) wsSend({ type: "play", time: video.currentTime });
+  });
+  video.addEventListener("pause", () => {
+    if (!isSeeking) wsSend({ type: "pause", time: video.currentTime });
+  });
+  video.addEventListener("seeking", () => { isSeeking = true; });
+  video.addEventListener("seeked",  () => {
+    wsSend({ type: "seek", time: video.currentTime });
+    setTimeout(() => { isSeeking = false; }, 300);
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+//  UI HELPERS
+// ═══════════════════════════════════════════════════════
+function updateMembersUI(count) {
+  const label = document.getElementById("sync-label");
+  if (label) label.textContent = count >= 2 ? "Sinxron ✅" : "Kutilmoqda...";
+}
+
+function addChatMsg(type, who, text) {
+  const box = document.getElementById("chat-box");
+  const div = document.createElement("div");
+  div.className = "chat-msg " + (type === "system" ? "system" : "");
+  if (type !== "system" && who) {
+    div.innerHTML = `<span class="who">${who}:</span> <span class="text">${escHtml(text)}</span>`;
+  } else {
+    div.innerHTML = `<span class="text">${escHtml(text)}</span>`;
+  }
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+function showFloatReaction(emoji) {
+  const el = document.createElement("div");
+  el.className = "float-react";
+  el.textContent = emoji;
+  el.style.left = (20 + Math.random() * 60) + "vw";
+  el.style.bottom = "100px";
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2100);
+  if (tg) tg.HapticFeedback?.impactOccurred("medium");
+}
+
+function toast(msg, duration = 2500) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  setTimeout(() => el.classList.remove("show"), duration);
+}
+
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;");
+}
+
+// ═══════════════════════════════════════════════════════
+//  ACTIONS
+// ═══════════════════════════════════════════════════════
+function sendReaction(emoji) {
+  wsSend({ type: "reaction", emoji });
+  showFloatReaction(emoji);
+  if (tg) tg.HapticFeedback?.impactOccurred("medium");
+}
+
+function sendChat() {
+  const inp  = document.getElementById("chat-input");
+  const text = inp.value.trim();
+  if (!text) return;
+  wsSend({ type: "chat", text });
+  addChatMsg("me", "Siz", text);
+  inp.value = "";
+}
+
+function sendPlay()  { const v = document.getElementById("video-player"); wsSend({type:"play",  time:v.currentTime}); v.play(); }
+function sendPause() { const v = document.getElementById("video-player"); wsSend({type:"pause", time:v.currentTime}); v.pause(); }
+
+function cancelSession() {
+  if (state.ws) { state.ws.close(); state.ws = null; }
+  state.sid = null;
+  showScreen("screen-movies");
+}
+
+function endSession() {
+  wsSend({ type: "end" });
+  if (state.ws) { state.ws.close(); state.ws = null; }
+  state.sid = null;
+  toast("Tomosha yakunlandi!");
+  setTimeout(() => showScreen("screen-movies"), 1500);
+}
+
+function wsSend(msg) {
+  if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+    state.ws.send(JSON.stringify(msg));
+  }
+}
+</script>
+</body>
+</html>
+
