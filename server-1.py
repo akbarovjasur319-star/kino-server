@@ -39,8 +39,16 @@ app.add_middleware(
 )
 
 # ── Static fayllar (watch.html) ──
-if os.path.exists("webapp"):
-    app.mount("/webapp", StaticFiles(directory="webapp"), name="webapp")
+import pathlib
+webapp_dir = pathlib.Path("webapp")
+if not webapp_dir.exists():
+    webapp_dir.mkdir(parents=True, exist_ok=True)
+    # watch.html yo'q bo'lsa placeholder yaratamiz
+    placeholder = webapp_dir / "watch.html"
+    if not placeholder.exists():
+        placeholder.write_text("<html><body>Loading...</body></html>")
+
+app.mount("/webapp", StaticFiles(directory="webapp", html=True), name="webapp")
 
 # ════════════════════════════════════════════════════════
 #  XOTIRA: Sessiyalar va WebSocket ulanishlar
@@ -102,44 +110,52 @@ async def get_session(sid: str):
         "members":  len(ws_connections.get(sid, {}))
     }
 
+# In-memory storage for movies and users (bot sends data here)
+_movies_cache: dict = {}
+_users_cache: dict = {}
+
+@app.post("/sync/movies")
+async def sync_movies(data: dict):
+    """Bot movies.json ni servega yuboradi."""
+    global _movies_cache
+    _movies_cache = data.get("movies", {})
+    return {"ok": True, "count": len(_movies_cache)}
+
+@app.post("/sync/users")
+async def sync_users(data: dict):
+    """Bot users.json ni servega yuboradi."""
+    global _users_cache
+    _users_cache = data.get("users", {})
+    return {"ok": True, "count": len(_users_cache)}
+
 @app.get("/movies")
 async def get_movies():
-    """movies.json dan kinolar ro'yxati — bot bilan bir xil papkada bo'lsa ishlaydi."""
-    try:
-        with open("movies.json", "r", encoding="utf-8") as f:
-            movies = json.load(f)
-        result = []
-        for mid, m in movies.items():
-            result.append({
-                "id":      mid,
-                "title":   m.get("title", ""),
-                "year":    m.get("year", ""),
-                "genre":   m.get("genre", ""),
-                "rating":  m.get("rating", 0),
-                "poster":  m.get("poster", ""),
-                "file_id": m.get("file_id", ""),
-            })
-        return {"movies": sorted(result, key=lambda x: x["rating"], reverse=True)}
-    except FileNotFoundError:
-        return {"movies": []}
+    """Kinolar ro'yxatini qaytaradi."""
+    result = []
+    for mid, m in _movies_cache.items():
+        result.append({
+            "id":      mid,
+            "title":   m.get("title", ""),
+            "year":    m.get("year", ""),
+            "genre":   m.get("genre", ""),
+            "rating":  m.get("rating", 0),
+            "poster":  m.get("poster", ""),
+            "file_id": m.get("file_id", ""),
+        })
+    return {"movies": sorted(result, key=lambda x: x["rating"], reverse=True)}
 
 @app.get("/users")
 async def get_users():
-    """users.json dan foydalanuvchilar."""
-    try:
-        with open("users.json", "r", encoding="utf-8") as f:
-            users = json.load(f)
-        result = []
-        for uid, u in users.items():
-            if u.get("username"):
-                result.append({
-                    "id":         int(uid),
-                    "first_name": u.get("first_name") or u.get("name", ""),
-                    "username":   u.get("username", ""),
-                })
-        return {"users": result}
-    except FileNotFoundError:
-        return {"users": []}
+    """Foydalanuvchilar ro'yxatini qaytaradi."""
+    result = []
+    for uid, u in _users_cache.items():
+        if u.get("username"):
+            result.append({
+                "id":         int(uid),
+                "first_name": u.get("first_name") or u.get("name", ""),
+                "username":   u.get("username", ""),
+            })
+    return {"users": result}
 
 @app.post("/invite")
 async def send_invite(data: dict):
@@ -351,3 +367,4 @@ async def _cleanup_loop():
             ws_connections.pop(sid, None)
         if expired:
             logger.info(f"Cleaned {len(expired)} expired sessions")
+
