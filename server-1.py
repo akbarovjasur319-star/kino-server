@@ -150,19 +150,40 @@ async def sync_users(data: dict):
     _save_file(USERS_FILE, _users_cache)
     return {"ok": True, "count": len(_users_cache)}
 
+@app.get("/video/{file_id}")
+async def get_video_url(file_id: str):
+    """Telegram file_id dan video URL oladi."""
+    try:
+        async with httpx.AsyncClient() as client:
+            r = await client.get(
+                f"https://api.telegram.org/bot{BOT_TOKEN}/getFile",
+                params={"file_id": file_id},
+                timeout=10
+            )
+            data = r.json()
+            if data.get("ok"):
+                path = data["result"]["file_path"]
+                url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{path}"
+                return {"url": url}
+    except Exception as e:
+        logger.warning(f"Video URL xato: {e}")
+    raise HTTPException(404, "Video topilmadi")
+
 @app.get("/movies")
 async def get_movies():
     """Kinolar ro'yxatini qaytaradi."""
     result = []
     for mid, m in _movies_cache.items():
         result.append({
-            "id":      mid,
-            "title":   m.get("title", ""),
-            "year":    m.get("year", ""),
-            "genre":   m.get("genre", ""),
-            "rating":  m.get("rating", 0),
-            "poster":  m.get("poster", ""),
-            "file_id": m.get("file_id", ""),
+            "id":        mid,
+            "title":     m.get("title", ""),
+            "year":      m.get("year", ""),
+            "genre":     m.get("genre", ""),
+            "rating":    m.get("rating", 0),
+            "poster":    m.get("poster", ""),
+            "file_id":   m.get("file_id", ""),
+            "video_url": m.get("video_url", ""),
+        })
         })
     return {"movies": sorted(result, key=lambda x: x["rating"], reverse=True)}
 
@@ -179,7 +200,25 @@ async def get_users():
             })
     return {"users": result}
 
-@app.post("/invite")
+@app.get("/video/{file_id:path}")
+async def get_video_url(file_id: str):
+    """file_id dan video URL oladi (Telegram API orqali)."""
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(
+                f"https://api.telegram.org/bot{BOT_TOKEN}/getFile",
+                params={"file_id": file_id}
+            )
+            data = r.json()
+            if data.get("ok"):
+                path = data["result"]["file_path"]
+                url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{path}"
+                return {"ok": True, "url": url}
+    except Exception as e:
+        logger.warning(f"getFile xato: {e}")
+    raise HTTPException(404, "Video topilmadi")
+
+
 async def send_invite(data: dict):
     """
     Bot orqali 2-userga taklif xabari yuboradi.
