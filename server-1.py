@@ -110,15 +110,36 @@ async def get_session(sid: str):
         "members":  len(ws_connections.get(sid, {}))
     }
 
-# In-memory storage for movies and users (bot sends data here)
-_movies_cache: dict = {}
-_users_cache: dict = {}
+# Fayl yo'llari — Render restartda ham saqlanadi
+MOVIES_FILE = "data_movies.json"
+USERS_FILE  = "data_users.json"
+
+def _load_file(path: str) -> dict:
+    try:
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except:
+        pass
+    return {}
+
+def _save_file(path: str, data: dict):
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
+    except Exception as e:
+        logger.warning(f"Fayl saqlash xato: {e}")
+
+# Ishga tushganda fayldan o'qib oladi
+_movies_cache: dict = _load_file(MOVIES_FILE)
+_users_cache: dict  = _load_file(USERS_FILE)
 
 @app.post("/sync/movies")
 async def sync_movies(data: dict):
     """Bot movies.json ni servega yuboradi."""
     global _movies_cache
     _movies_cache = data.get("movies", {})
+    _save_file(MOVIES_FILE, _movies_cache)
     return {"ok": True, "count": len(_movies_cache)}
 
 @app.post("/sync/users")
@@ -126,6 +147,7 @@ async def sync_users(data: dict):
     """Bot users.json ni servega yuboradi."""
     global _users_cache
     _users_cache = data.get("users", {})
+    _save_file(USERS_FILE, _users_cache)
     return {"ok": True, "count": len(_users_cache)}
 
 @app.get("/movies")
@@ -367,4 +389,3 @@ async def _cleanup_loop():
             ws_connections.pop(sid, None)
         if expired:
             logger.info(f"Cleaned {len(expired)} expired sessions")
-
