@@ -184,7 +184,6 @@ async def get_movies():
             "file_id":   m.get("file_id", ""),
             "video_url": m.get("video_url", ""),
         })
-        })
     return {"movies": sorted(result, key=lambda x: x["rating"], reverse=True)}
 
 @app.get("/users")
