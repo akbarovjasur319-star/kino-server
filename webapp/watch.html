@@ -926,11 +926,22 @@ function setupPlayer(movie) {
   const video = document.getElementById("video-player");
 
   if (movie.file_id) {
-    // Telegram file — bot orqali URL kerak
-    // Hozircha poster ko'rsatamiz
     video.poster = movie.poster || "";
     video.src    = "";
     addChatMsg("system", null, `"${movie.title}" videosi yuklanmoqda...`);
+    fetch(`/video/${movie.file_id}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.url) {
+          video.src = d.url;
+          addChatMsg("system", null, `✅ "${movie.title}" tayyor!`);
+        } else {
+          addChatMsg("system", null, `❌ Video URL olishda xato.`);
+        }
+      })
+      .catch(() => {
+        addChatMsg("system", null, `❌ Server bilan boglanib bolmadi.`);
+      });
   } else if (movie.video_url) {
     video.src    = movie.video_url;
     video.poster = movie.poster || "";
