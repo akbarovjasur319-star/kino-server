@@ -110,36 +110,15 @@ async def get_session(sid: str):
         "members":  len(ws_connections.get(sid, {}))
     }
 
-# Fayl yo'llari — Render restartda ham saqlanadi
-MOVIES_FILE = "data_movies.json"
-USERS_FILE  = "data_users.json"
-
-def _load_file(path: str) -> dict:
-    try:
-        if os.path.exists(path):
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-    except:
-        pass
-    return {}
-
-def _save_file(path: str, data: dict):
-    try:
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False)
-    except Exception as e:
-        logger.warning(f"Fayl saqlash xato: {e}")
-
-# Ishga tushganda fayldan o'qib oladi
-_movies_cache: dict = _load_file(MOVIES_FILE)
-_users_cache: dict  = _load_file(USERS_FILE)
+# In-memory storage for movies and users (bot sends data here)
+_movies_cache: dict = {}
+_users_cache: dict = {}
 
 @app.post("/sync/movies")
 async def sync_movies(data: dict):
     """Bot movies.json ni servega yuboradi."""
     global _movies_cache
     _movies_cache = data.get("movies", {})
-    _save_file(MOVIES_FILE, _movies_cache)
     return {"ok": True, "count": len(_movies_cache)}
 
 @app.post("/sync/users")
@@ -147,27 +126,7 @@ async def sync_users(data: dict):
     """Bot users.json ni servega yuboradi."""
     global _users_cache
     _users_cache = data.get("users", {})
-    _save_file(USERS_FILE, _users_cache)
     return {"ok": True, "count": len(_users_cache)}
-
-@app.get("/video/{file_id}")
-async def get_video_url(file_id: str):
-    """Telegram file_id dan video URL oladi."""
-    try:
-        async with httpx.AsyncClient() as client:
-            r = await client.get(
-                f"https://api.telegram.org/bot{BOT_TOKEN}/getFile",
-                params={"file_id": file_id},
-                timeout=10
-            )
-            data = r.json()
-            if data.get("ok"):
-                path = data["result"]["file_path"]
-                url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{path}"
-                return {"url": url}
-    except Exception as e:
-        logger.warning(f"Video URL xato: {e}")
-    raise HTTPException(404, "Video topilmadi")
 
 @app.get("/movies")
 async def get_movies():
@@ -175,14 +134,13 @@ async def get_movies():
     result = []
     for mid, m in _movies_cache.items():
         result.append({
-            "id":        mid,
-            "title":     m.get("title", ""),
-            "year":      m.get("year", ""),
-            "genre":     m.get("genre", ""),
-            "rating":    m.get("rating", 0),
-            "poster":    m.get("poster", ""),
-            "file_id":   m.get("file_id", ""),
-            "video_url": m.get("video_url", ""),
+            "id":      mid,
+            "title":   m.get("title", ""),
+            "year":    m.get("year", ""),
+            "genre":   m.get("genre", ""),
+            "rating":  m.get("rating", 0),
+            "poster":  m.get("poster", ""),
+            "file_id": m.get("file_id", ""),
         })
     return {"movies": sorted(result, key=lambda x: x["rating"], reverse=True)}
 
@@ -199,25 +157,7 @@ async def get_users():
             })
     return {"users": result}
 
-@app.get("/video/{file_id:path}")
-async def get_video_url(file_id: str):
-    """file_id dan video URL oladi (Telegram API orqali)."""
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            r = await client.get(
-                f"https://api.telegram.org/bot{BOT_TOKEN}/getFile",
-                params={"file_id": file_id}
-            )
-            data = r.json()
-            if data.get("ok"):
-                path = data["result"]["file_path"]
-                url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{path}"
-                return {"ok": True, "url": url}
-    except Exception as e:
-        logger.warning(f"getFile xato: {e}")
-    raise HTTPException(404, "Video topilmadi")
-
-
+@app.post("/invite")
 async def send_invite(data: dict):
     """
     Bot orqali 2-userga taklif xabari yuboradi.
@@ -409,6 +349,180 @@ async def _broadcast_all(sid: str, msg: dict):
             pass
 
 
+
+# ╔══════════════════════════════════════════════════════════════╗
+# ║                  📺 JASUR TV — SERVER API                   ║
+# ╚══════════════════════════════════════════════════════════════╝
+
+import boto3
+from botocore.client import Config
+from datetime import datetime, timedelta
+
+# B2 kalitlar
+B2_KEY_ID     = os.getenv("B2_KEY_ID", "")
+B2_APP_KEY    = os.getenv("B2_APP_KEY", "")
+B2_BUCKET     = os.getenv("B2_BUCKET_NAME", "jasurtv-videos")
+B2_ENDPOINT   = os.getenv("B2_ENDPOINT", "s3.us-east-005.backblazeb2.com")
+
+def get_b2_client():
+    return boto3.client(
+        "s3",
+        endpoint_url=f"https://{B2_ENDPOINT}",
+        aws_access_key_id=B2_KEY_ID,
+        aws_secret_access_key=B2_APP_KEY,
+        config=Config(signature_version="s3v4")
+    )
+
+# JasurTV ma'lumotlar
+tv_schedule: dict = {}        # {"2026-06-20": {"items": [...], "active": True}}
+tv_viewers:  dict = {}        # {user_id: last_ping_time}
+tv_ws_conns: set  = set()     # WebSocket ulanishlar
+
+# ── B2 UPLOAD ──
+@app.post("/tv/upload-url")
+async def get_upload_url(data: dict):
+    """Bot video yuklash uchun presigned URL beradi."""
+    filename = data.get("filename", f"video_{int(time.time())}.mp4")
+    try:
+        s3 = get_b2_client()
+        url = s3.generate_presigned_url(
+            "put_object",
+            Params={"Bucket": B2_BUCKET, "Key": filename, "ContentType": "video/mp4"},
+            ExpiresIn=3600
+        )
+        video_url = f"https://{B2_BUCKET}.{B2_ENDPOINT}/{filename}"
+        return {"ok": True, "upload_url": url, "video_url": video_url, "filename": filename}
+    except Exception as e:
+        raise HTTPException(500, f"B2 xatosi: {e}")
+
+# ── JADVAL ──
+@app.post("/tv/schedule")
+async def save_schedule(data: dict):
+    """Bot jadval yuboradi."""
+    global tv_schedule
+    date  = data.get("date")
+    items = data.get("items", [])
+    if not date:
+        raise HTTPException(400, "date kerak")
+    tv_schedule[date] = {"items": items, "active": True}
+    return {"ok": True, "date": date, "count": len(items)}
+
+@app.get("/tv/schedule/{date}")
+async def get_schedule(date: str):
+    return tv_schedule.get(date, {"items": [], "active": False})
+
+@app.get("/tv/schedule")
+async def get_all_schedules():
+    return {"schedules": list(tv_schedule.keys())}
+
+@app.delete("/tv/schedule/{date}")
+async def delete_schedule(date: str):
+    tv_schedule.pop(date, None)
+    return {"ok": True}
+
+# ── HOZIRGI EFIR ──
+@app.get("/tv/current")
+async def get_current():
+    """Hozir qaysi kino/ko'rsatuv ijro etilayotganini hisoblaydi."""
+    today = datetime.now().strftime("%Y-%m-%d")
+    sched = tv_schedule.get(today, {})
+    
+    if not sched.get("active"):
+        # Boshqa sanalarni ham tekshirish (faol jadval)
+        for date, s in sorted(tv_schedule.items()):
+            if s.get("active") and date >= today:
+                sched = s
+                break
+    
+    items = sched.get("items", [])
+    if not items:
+        return {"current": None, "schedule": [], "offset_seconds": 0, "viewers": active_viewers()}
+
+    now     = datetime.now()
+    now_min = now.hour * 60 + now.minute + now.second / 60
+
+    current    = None
+    offset_sec = 0
+
+    for i, item in enumerate(items):
+        t = item.get("time", "00:00")
+        h, m = map(int, t.split(":"))
+        item_min = h * 60 + m
+        duration = item.get("duration_min", 90)
+
+        if item_min <= now_min < item_min + duration:
+            current    = item
+            offset_sec = int((now_min - item_min) * 60)
+            break
+        elif item_min > now_min:
+            # Hali boshlanmagan — oxirgi tugagan item
+            if i > 0:
+                prev = items[i-1]
+                ph, pm = map(int, prev.get("time","00:00").split(":"))
+                prev_min = ph * 60 + pm
+                pdur     = prev.get("duration_min", 90)
+                if prev_min + pdur > now_min:
+                    current    = prev
+                    offset_sec = int((now_min - prev_min) * 60)
+            break
+
+    return {
+        "current":        current,
+        "schedule":       items,
+        "offset_seconds": offset_sec,
+        "viewers":        active_viewers()
+    }
+
+# ── KO'RUVCHILAR ──
+@app.post("/tv/ping")
+async def tv_ping(data: dict):
+    uid = str(data.get("user_id", "anon"))
+    tv_viewers[uid] = time.time()
+    return {"ok": True, "viewers": active_viewers()}
+
+def active_viewers() -> int:
+    now = time.time()
+    return sum(1 for t in tv_viewers.values() if now - t < 30)
+
+# ── WEBSOCKET — TV ──
+@app.websocket("/tv/ws/{user_id}")
+async def tv_websocket(ws: WebSocket, user_id: int):
+    await ws.accept()
+    tv_ws_conns.add(ws)
+    tv_viewers[str(user_id)] = time.time()
+
+    try:
+        while True:
+            await asyncio.sleep(10)
+            tv_viewers[str(user_id)] = time.time()
+            count = active_viewers()
+            try:
+                await ws.send_json({"type": "viewers", "count": count})
+            except:
+                break
+            # Barcha ko'ruvchilarga yuborish
+            for conn in list(tv_ws_conns):
+                if conn != ws:
+                    try:
+                        await conn.send_json({"type": "viewers", "count": count})
+                    except:
+                        tv_ws_conns.discard(conn)
+    except WebSocketDisconnect:
+        pass
+    finally:
+        tv_ws_conns.discard(ws)
+        tv_viewers.pop(str(user_id), None)
+
+async def tv_broadcast(msg: dict):
+    """Barcha TV ko'ruvchilarga xabar yuborish."""
+    for conn in list(tv_ws_conns):
+        try:
+            await conn.send_json(msg)
+        except:
+            tv_ws_conns.discard(conn)
+
+
+
 # ════════════════════════════════════════════════════════
 #  TOZALASH — 2 soatdan eski sessiyalarni o'chirish
 # ════════════════════════════════════════════════════════
@@ -427,3 +541,279 @@ async def _cleanup_loop():
             ws_connections.pop(sid, None)
         if expired:
             logger.info(f"Cleaned {len(expired)} expired sessions")
+
+
+# ╔══════════════════════════════════════════════════════════════╗
+# ║                  📺 JASURTV API                             ║
+# ╚══════════════════════════════════════════════════════════════╝
+
+import boto3
+from botocore.config import Config
+from datetime import datetime, timedelta
+import uuid
+
+B2_KEY_ID     = os.getenv("B2_KEY_ID",     "")
+B2_APP_KEY    = os.getenv("B2_APP_KEY",    "")
+B2_BUCKET     = os.getenv("B2_BUCKET_NAME","jasurtv-videos")
+B2_ENDPOINT   = os.getenv("B2_ENDPOINT",   "s3.us-east-005.backblazeb2.com")
+
+JASURTV_SCHEDULE_FILE = "jasurtv_schedule.json"
+JASURTV_VIEWERS_FILE  = "jasurtv_viewers.json"
+JASURTV_CONFIG_FILE   = "jasurtv_config.json"
+
+VIP_PRICES = {"1": "29,900 so'm", "3": "79,900 so'm", "12": "249,900 so'm"}
+
+# ── Storage ──
+_schedule_cache: dict = {}
+_viewers: dict = {}
+_vip_cache: dict = {}
+
+def get_b2_client():
+    return boto3.client(
+        "s3",
+        endpoint_url=f"https://{B2_ENDPOINT}",
+        aws_access_key_id=B2_KEY_ID,
+        aws_secret_access_key=B2_APP_KEY,
+        config=Config(signature_version="s3v4")
+    )
+
+# ── SYNC: Bot dan jadval qabul qiladi ──
+@app.post("/jasurtv/sync_schedule")
+async def sync_schedule(data: dict):
+    global _schedule_cache
+    date  = data.get("date", datetime.now().strftime("%Y-%m-%d"))
+    items = data.get("items", [])
+    _schedule_cache[date] = items
+    # Faylga ham saqlash
+    try:
+        if os.path.exists(JASURTV_SCHEDULE_FILE):
+            with open(JASURTV_SCHEDULE_FILE,"r",encoding="utf-8") as f:
+                all_schedules = json.load(f)
+        else:
+            all_schedules = {}
+        all_schedules[date] = items
+        with open(JASURTV_SCHEDULE_FILE,"w",encoding="utf-8") as f:
+            json.dump(all_schedules, f, ensure_ascii=False, indent=2)
+    except: pass
+    return {"ok": True, "date": date, "count": len(items)}
+
+# ── Jadval olish ──
+@app.get("/jasurtv/schedule")
+async def get_schedule(date: str = ""):
+    if not date:
+        date = datetime.now().strftime("%Y-%m-%d")
+    # Cache dan
+    if date in _schedule_cache:
+        return {"date": date, "items": _schedule_cache[date]}
+    # Fayldan
+    try:
+        if os.path.exists(JASURTV_SCHEDULE_FILE):
+            with open(JASURTV_SCHEDULE_FILE,"r",encoding="utf-8") as f:
+                all_s = json.load(f)
+            items = all_s.get(date, [])
+            _schedule_cache[date] = items
+            return {"date": date, "items": items}
+    except: pass
+    return {"date": date, "items": []}
+
+# ── VIP tekshirish ──
+@app.get("/jasurtv/check_vip")
+async def check_vip(user_id: int = 0):
+    if not user_id:
+        return {"is_vip": False}
+    uid = str(user_id)
+    if uid in _vip_cache:
+        vdata = _vip_cache[uid]
+        try:
+            exp = datetime.strptime(vdata.get("expire","2000-01-01"),"%Y-%m-%d")
+            return {"is_vip": exp > datetime.now()}
+        except:
+            return {"is_vip": False}
+    return {"is_vip": False}
+
+# ── Bot VIP sync ──
+@app.post("/jasurtv/sync_vip")
+async def sync_vip(data: dict):
+    global _vip_cache
+    _vip_cache = data.get("vip", {})
+    return {"ok": True, "count": len(_vip_cache)}
+
+# ── VIP narxlar ──
+@app.get("/jasurtv/vip_prices")
+async def vip_prices():
+    return VIP_PRICES
+
+# ── B2 signed URL ──
+@app.get("/jasurtv/get_url")
+async def get_signed_url(file: str = ""):
+    if not file or not B2_KEY_ID:
+        raise HTTPException(400, "File or credentials missing")
+    try:
+        s3 = get_b2_client()
+        url = s3.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": B2_BUCKET, "Key": file},
+            ExpiresIn=7200  # 2 soat
+        )
+        return {"url": url}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+# ── B2 upload URL (bot uchun) ──
+@app.post("/jasurtv/upload_url")
+async def get_upload_url(data: dict):
+    filename   = data.get("filename", f"{uuid.uuid4()}.mp4")
+    content_type = data.get("content_type", "video/mp4")
+    if not B2_KEY_ID:
+        raise HTTPException(400, "B2 credentials missing")
+    try:
+        s3 = get_b2_client()
+        url = s3.generate_presigned_url(
+            "put_object",
+            Params={"Bucket": B2_BUCKET, "Key": filename, "ContentType": content_type},
+            ExpiresIn=3600
+        )
+        file_url = f"https://{B2_ENDPOINT}/{B2_BUCKET}/{filename}"
+        return {"upload_url": url, "file_key": filename, "file_url": file_url}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+# ── Viewers ──
+_active_viewers: dict = {}  # {user_id: last_seen}
+
+@app.post("/jasurtv/viewer")
+async def register_viewer(data: dict):
+    uid = str(data.get("user_id", "anon"))
+    _active_viewers[uid] = time.time()
+    return {"ok": True}
+
+@app.get("/jasurtv/viewers")
+async def get_viewers():
+    # 5 daqiqadan eski viewerlarni o'chirish
+    now = time.time()
+    active = {k: v for k, v in _active_viewers.items() if now - v < 300}
+    _active_viewers.clear()
+    _active_viewers.update(active)
+    return {"count": len(active)}
+
+
+# ── 24/7 LIVE PLAYER UCHUN ──
+
+def _jtv_load_schedule():
+    try:
+        if os.path.exists(JASURTV_SCHEDULE_FILE):
+            with open(JASURTV_SCHEDULE_FILE,"r",encoding="utf-8") as f:
+                return json.load(f)
+    except: pass
+    return {}
+
+def _jtv_today_items():
+    today = datetime.now().strftime("%Y-%m-%d")
+    sched = _jtv_load_schedule()
+    return sched.get(today, {}).get("items", [])
+
+def _jtv_current_and_next():
+    now_str = datetime.now().strftime("%H:%M")
+    items   = _jtv_today_items()
+    current, nxt = None, None
+    for it in items:
+        t = it.get("time","99:99")
+        if t <= now_str:
+            current = it
+        elif nxt is None:
+            nxt = it
+    return current, nxt
+
+def _jtv_position_seconds(item):
+    if not item: return 0
+    now = datetime.now()
+    t   = item.get("time","00:00")
+    try:
+        h,m = map(int, t.split(":"))
+        start = now.replace(hour=h, minute=m, second=0, microsecond=0)
+        return max(0, int((now-start).total_seconds()))
+    except:
+        return 0
+
+def _jtv_video_url(item):
+    """Item uchun video URL. B2 da bo'lsa presigned URL, bo'lmasa video_url."""
+    if not item:
+        return None
+    if item.get("video_url"):
+        return item["video_url"]
+    b2_filename = item.get("b2_filename")
+    if b2_filename:
+        try:
+            s3 = boto3.client(
+                's3',
+                endpoint_url=f"https://{B2_ENDPOINT}",
+                aws_access_key_id=B2_KEY_ID,
+                aws_secret_access_key=B2_APP_KEY,
+                config=Config(signature_version='s3v4')
+            )
+            return s3.generate_presigned_url(
+                'get_object',
+                Params={'Bucket': B2_BUCKET, 'Key': b2_filename},
+                ExpiresIn=21600  # 6 soat
+            )
+        except Exception as e:
+            logging.warning(f"B2 presigned url error: {e}")
+    return None
+
+
+@app.get("/jasurtv/current")
+async def jasurtv_current():
+    """
+    24/7 Live Player uchun: hozir nima ijro etilayotgani
+    va qaysi sekunddan boshlash kerakligini qaytaradi.
+    """
+    current, nxt = _jtv_current_and_next()
+
+    result = {"current": None, "next": None}
+
+    if current:
+        result["current"] = {
+            "id":               current.get("id"),
+            "type":             current.get("type","movie"),
+            "title":            current.get("title",""),
+            "time":             current.get("time",""),
+            "video_url":        _jtv_video_url(current),
+            "position_seconds": _jtv_position_seconds(current),
+        }
+
+    if nxt:
+        result["next"] = {
+            "id":    nxt.get("id"),
+            "type":  nxt.get("type","movie"),
+            "title": nxt.get("title",""),
+            "time":  nxt.get("time",""),
+        }
+
+    return result
+
+
+@app.post("/jasurtv/ping")
+async def jasurtv_ping(data: dict):
+    """User JasurTV ko'rayotganini bildiradi (viewer count uchun)."""
+    uid = str(data.get("uid", "0"))
+    _active_viewers[uid] = time.time()
+
+    now = time.time()
+    active = {k: v for k, v in _active_viewers.items() if now - v < 300}
+    _active_viewers.clear()
+    _active_viewers.update(active)
+
+    return {"ok": True, "viewers": len(active)}
+
+
+# ── Admin: jadvallar ro'yxati ──
+@app.get("/jasurtv/schedules")
+async def list_schedules():
+    try:
+        if os.path.exists(JASURTV_SCHEDULE_FILE):
+            with open(JASURTV_SCHEDULE_FILE,"r",encoding="utf-8") as f:
+                all_s = json.load(f)
+            return {"dates": sorted(all_s.keys()), "schedules": all_s}
+    except: pass
+    return {"dates": [], "schedules": {}}
+
