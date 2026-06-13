@@ -740,11 +740,12 @@ def _jtv_position_seconds(item):
         return 0
 
 def _jtv_video_url(item):
-    """Item uchun video URL. B2 da bo'lsa presigned URL, bo'lmasa video_url."""
+    """Item uchun video URL. video_url > B2 > Telegram file_id."""
     if not item:
         return None
     if item.get("video_url"):
         return item["video_url"]
+
     b2_filename = item.get("b2_filename")
     if b2_filename:
         try:
@@ -762,6 +763,23 @@ def _jtv_video_url(item):
             )
         except Exception as e:
             logging.warning(f"B2 presigned url error: {e}")
+
+    # Telegram file_id orqali (vaqtinchalik, ~1 soat amal qiladi)
+    file_id = item.get("file_id")
+    if file_id:
+        try:
+            with httpx.Client(timeout=10) as client:
+                r = client.get(
+                    f"https://api.telegram.org/bot{BOT_TOKEN}/getFile",
+                    params={"file_id": file_id}
+                )
+                data = r.json()
+                if data.get("ok"):
+                    file_path = data["result"]["file_path"]
+                    return f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
+        except Exception as e:
+            logging.warning(f"Telegram getFile error: {e}")
+
     return None
 
 
