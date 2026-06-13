@@ -714,7 +714,12 @@ def _jtv_now():
 def _jtv_today_items():
     today = _jtv_now().strftime("%Y-%m-%d")
     sched = _jtv_load_schedule()
-    return sched.get(today, {}).get("items", [])
+    day   = sched.get(today, [])
+    if isinstance(day, dict):
+        return day.get("items", [])
+    if isinstance(day, list):
+        return day
+    return []
 
 def _jtv_current_and_next():
     now_str = _jtv_now().strftime("%H:%M")
