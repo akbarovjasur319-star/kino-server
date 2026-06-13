@@ -707,13 +707,17 @@ def _jtv_load_schedule():
     except: pass
     return {}
 
+def _jtv_now():
+    """Tashkent vaqti (UTC+5) bo'yicha hozirgi vaqt."""
+    return datetime.utcnow() + timedelta(hours=5)
+
 def _jtv_today_items():
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = _jtv_now().strftime("%Y-%m-%d")
     sched = _jtv_load_schedule()
     return sched.get(today, {}).get("items", [])
 
 def _jtv_current_and_next():
-    now_str = datetime.now().strftime("%H:%M")
+    now_str = _jtv_now().strftime("%H:%M")
     items   = _jtv_today_items()
     current, nxt = None, None
     for it in items:
@@ -726,7 +730,7 @@ def _jtv_current_and_next():
 
 def _jtv_position_seconds(item):
     if not item: return 0
-    now = datetime.now()
+    now = _jtv_now()
     t   = item.get("time","00:00")
     try:
         h,m = map(int, t.split(":"))
